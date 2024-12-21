@@ -45,6 +45,46 @@ public class GoogleSheetsService
         return response.Values;
     }
 
+    public async Task<IList<IList<object>>> ReadEntireSheetAsync(string sheetName)
+    {
+        try
+        {
+            // Указываем диапазон как "SheetName"
+            var request = _sheetsService.Spreadsheets.Values.Get(_spreadsheetId, sheetName);
+            var response = await request.ExecuteAsync();
+
+            // Если данных нет, возвращаем пустой список
+            return response.Values ?? new List<IList<object>>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при чтении листа {sheetName}: {ex.Message}");
+            return new List<IList<object>>();
+        }
+    }
+
+    public async Task<List<string>> GetSheetNamesAsync()
+    {
+        try
+        {
+            var request = _sheetsService.Spreadsheets.Get(_spreadsheetId);
+            var response = await request.ExecuteAsync();
+
+            var sheetNames = response.Sheets
+                .Select(sheet => sheet.Properties.Title)
+                .ToList();
+
+            return sheetNames;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при получении списка листов: {ex.Message}");
+            return new List<string>();
+        }
+    }
+
+
+
     public async Task UpdateCellWithCurrentDateTimeAsync(string range)
     {
         // Получаем текущую дату и время
@@ -67,7 +107,9 @@ public class GoogleSheetsService
     public async Task UpdateFirstEmptyCellInColumnAsync()
     {
         // Читаем значения из первой колонки (A)
-        var range = "Лист1!A1:A1000"; // Укажите ваш лист и колонку
+        var listSheets = await GetSheetNamesAsync();
+        var sheet = await ReadEntireSheetAsync(listSheets.FirstOrDefault());
+        var range = "Лист1!A1:C4"; // Укажите ваш лист и колонку
         var values = await ReadRangeAsync(range);
 
         // Находим первую пустую ячейку
