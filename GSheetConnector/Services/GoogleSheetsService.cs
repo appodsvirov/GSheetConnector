@@ -24,6 +24,85 @@ public class GoogleSheetsService
             ApplicationName = "Google Sheets API Example"
         });
     }
+    /// <summary>
+    /// Возвращает список всех листов 
+    /// </summary>
+    public async Task<List<string>> GetSheetNamesAsync()
+    {
+        try
+        {
+            var request = _sheetsService.Spreadsheets.Get(_spreadsheetId);
+            var response = await request.ExecuteAsync();
+
+            var sheetNames = response.Sheets
+                .Select(sheet => sheet.Properties.Title)
+                .ToList();
+
+            return sheetNames;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при получении списка листов: {ex.Message}");
+            return new List<string>();
+        }
+    }
+
+    /// <summary>
+    /// Метод для считывания всего листа
+    /// </summary>
+    public async Task<IList<IList<object>>> ReadEntireSheetAsync(string sheetName)
+    {
+        try
+        {
+            // Указываем диапазон как "SheetName"
+            var request = _sheetsService.Spreadsheets.Values.Get(_spreadsheetId, sheetName);
+            var response = await request.ExecuteAsync();
+
+            // Если данных нет, возвращаем пустой список
+            return response.Values ?? new List<IList<object>>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при чтении листа {sheetName}: {ex.Message}");
+            return new List<IList<object>>();
+        }
+    }
+
+    /// <summary>
+    /// Метод, который ищет первую незаполненную строку на указанном листе и возвращает её адрес в виде строки:
+    /// </summary>
+    public async Task<string> GetFirstEmptyRowAddressAsync(string sheetName, string column = "A")
+    {
+        try
+        {
+            // Считываем весь лист
+            var values = await ReadEntireSheetAsync(sheetName);
+
+            // Находим первую пустую строку в указанной колонке
+            int rowIndex = 0;
+            while (rowIndex < values.Count && rowIndex < 1000) // Ограничение в 1000 строк
+            {
+                var cellValue = rowIndex < values.Count && values[rowIndex].Count > 0
+                    ? values[rowIndex][0]?.ToString()
+                    : null;
+
+                if (string.IsNullOrEmpty(cellValue))
+                {
+                    break;
+                }
+                rowIndex++;
+            }
+
+            // Возвращаем адрес первой пустой строки
+            return $"{sheetName}!{column}{rowIndex + 1}";  // Строки начинаются с 1
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при поиске первой пустой строки: {ex.Message}");
+            return string.Empty;
+        }
+    }
+
 
     public async Task UpdateCellAsync(string range, string value)
     {
@@ -43,44 +122,6 @@ public class GoogleSheetsService
         var request = _sheetsService.Spreadsheets.Values.Get(_spreadsheetId, range);
         var response = await request.ExecuteAsync();
         return response.Values;
-    }
-
-    public async Task<IList<IList<object>>> ReadEntireSheetAsync(string sheetName)
-    {
-        try
-        {
-            // Указываем диапазон как "SheetName"
-            var request = _sheetsService.Spreadsheets.Values.Get(_spreadsheetId, sheetName);
-            var response = await request.ExecuteAsync();
-
-            // Если данных нет, возвращаем пустой список
-            return response.Values ?? new List<IList<object>>();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Ошибка при чтении листа {sheetName}: {ex.Message}");
-            return new List<IList<object>>();
-        }
-    }
-
-    public async Task<List<string>> GetSheetNamesAsync()
-    {
-        try
-        {
-            var request = _sheetsService.Spreadsheets.Get(_spreadsheetId);
-            var response = await request.ExecuteAsync();
-
-            var sheetNames = response.Sheets
-                .Select(sheet => sheet.Properties.Title)
-                .ToList();
-
-            return sheetNames;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Ошибка при получении списка листов: {ex.Message}");
-            return new List<string>();
-        }
     }
 
 
