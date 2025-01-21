@@ -13,6 +13,10 @@ builder.Services.AddScoped<GoogleSheetsService>(provider =>
     return new GoogleSheetsService(credentialsPath, spreadsheetId);
 });
 
+
+var parser = new StatementParser();
+var pdfText = parser.ReadPdf("C:\\Users\\mr_bi\\Desktop\\test.pdf");
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
