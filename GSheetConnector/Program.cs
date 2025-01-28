@@ -1,3 +1,5 @@
+using GSheetConnector.Controllers;
+using GSheetConnector.Interfaces;
 using GSheetConnector.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +14,9 @@ builder.Services.AddScoped<GoogleSheetsService>(provider =>
     var spreadsheetId = googleSheetsConfig["SpreadsheetId"];
     return new GoogleSheetsService(credentialsPath, spreadsheetId);
 });
+builder.Services.AddHttpClient<ITelegramService, TelegramService>();
+builder.Services.AddSingleton<TelegramController>();
+builder.Services.AddHostedService<TelegramPollingService>();
 
 
 var parser = new StatementParser();
