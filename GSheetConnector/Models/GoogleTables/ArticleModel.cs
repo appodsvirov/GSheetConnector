@@ -1,4 +1,4 @@
-﻿namespace GSheetConnector.Models
+﻿namespace GSheetConnector.Models.GoogleTables
 {
     public class ArticleModel
     {

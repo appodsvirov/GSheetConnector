@@ -1,4 +1,4 @@
-﻿namespace GSheetConnector.Models
+﻿namespace GSheetConnector.Models.GoogleTables
 {
     public class Table : List<Dictionary<string, string?>>
     {
