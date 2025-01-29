@@ -17,7 +17,8 @@ namespace GSheetConnector.Services
         {
             if (!File.Exists(filePath))
             {
-                throw new FileNotFoundException("PDF файл не найден", filePath);
+                //throw new FileNotFoundException("PDF файл не найден", filePath);
+                return "";
             }
 
             var textBuilder = new StringBuilder();
