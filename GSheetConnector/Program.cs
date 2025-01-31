@@ -15,6 +15,10 @@ builder.Services.AddScoped<GoogleSheetsService>(provider =>
     return new GoogleSheetsService(credentialsPath, spreadsheetId);
 });
 
+// Добавляем сервис бота
+builder.Services.AddSingleton<TelegramBotService>();
+
+
 
 
 var parser = new StatementParser();
@@ -35,5 +39,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.MapControllers();
+
+
+
+// При запуске включаем бота
+var botService = app.Services.GetRequiredService<TelegramBotService>();
+botService.Start();
+
 
 app.Run();
