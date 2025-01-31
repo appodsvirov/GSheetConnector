@@ -1,6 +1,6 @@
 ﻿using Telegram.Bot.Types;
 using GSheetConnector.Models;
-using Update = GSheetConnector.Models.Update;
+//using Update = GSheetConnector.Models.Update;
 
 namespace GSheetConnector.Interfaces
 {

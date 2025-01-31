@@ -14,9 +14,7 @@ builder.Services.AddScoped<GoogleSheetsService>(provider =>
     var spreadsheetId = googleSheetsConfig["SpreadsheetId"];
     return new GoogleSheetsService(credentialsPath, spreadsheetId);
 });
-builder.Services.AddHttpClient<ITelegramService, TelegramService>();
-builder.Services.AddSingleton<TelegramController>();
-builder.Services.AddHostedService<TelegramPollingService>();
+
 
 
 var parser = new StatementParser();
@@ -35,20 +33,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path == "/")
-    {
-        context.Response.Redirect("/swagger");
-    }
-    else
-    {
-        await next();
-    }
-});
-
 app.UseHttpsRedirection();
-app.MapGet("/", () => "Hello World!");
 app.MapControllers();
 
 app.Run();
