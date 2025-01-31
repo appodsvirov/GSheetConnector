@@ -362,3 +362,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 *.txt
+/GSheetConnector/appsettings.json
+/GSheetConnector/Downloads
+/GSheetConnector/appsettings.json
