@@ -12,9 +12,11 @@
     <PackageReference Include="Google.Apis.Sheets.v4" Version="1.68.0.3624" />
     <PackageReference Include="itext7" Version="9.0.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
+    <PackageReference Include="Telegram.Bot" Version="22.3.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Models\TelegramBot\" />
     <Folder Include="Sheared\" />
   </ItemGroup>
 
