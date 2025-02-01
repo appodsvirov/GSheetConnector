@@ -42,86 +42,103 @@ namespace GSheetConnector.Services
         public IEnumerable<Transaction> ParseTransactions(string text)
         {
             var transactions = new List<Transaction>();
-            var lines = text.Split(new[] { Environment.NewLine, "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            var currentTransactionLines = new List<string>();
-            var transactionStartPattern = @"^\d{2}\.\d{2}\.\d{4}"; // Начало транзакции (дата)
-            var transactionEndPattern = @"\d{4}$";                 // Конец транзакции (4 цифры номера карты)
+            var lines = text.Split('\n');
+            var firstLineTransactionRegex = new Regex(@"\d{2}\.\d{2}\.\d{4}\s+\d{2}\.\d{2}\.\d{4}.*");
 
-            foreach (var line in lines)
+            Transaction? currentTransaction = new();
+
+            for (var i = 0; i < lines.Length; i++)
             {
-                if (Regex.IsMatch(line, transactionStartPattern)) // Начало новой транзакции
+                var line = lines[i];
+                var match = firstLineTransactionRegex.Match(line);
+
+                if (match.Success)
                 {
-                    if (currentTransactionLines.Count > 0) // Обработка предыдущей транзакции
+                    var normalizeLine = NormalizeCurrencySpacing(line);
+                    var splitLine = normalizeLine.Split(" ");
+
+                    var nextLine = lines[++i];
+                    var splitNextLine = nextLine.Split(" ");
+
+
+                    currentTransaction = ParseTransaction(splitLine, splitNextLine);
+
+
+                    while (true)
                     {
-                        if (TryParseTransaction(currentTransactionLines, out var transaction))
+                        
+                        nextLine = lines[++i];
+
+                        if (nextLine.Contains("Пополнения:"))
                         {
-                            transactions.Add(transaction);
+                            transactions.Add(currentTransaction);
+                            return transactions;
                         }
-                        currentTransactionLines.Clear();
+
+                        if (!firstLineTransactionRegex.Match(nextLine).Success)
+                        {
+                            currentTransaction.Description += nextLine;
+                        }
+                        else
+                        {
+                            i--;
+                            transactions.Add(currentTransaction);
+                            break;
+
+                        }
                     }
                 }
-
-                currentTransactionLines.Add(line);
-
-                if (Regex.IsMatch(line, transactionEndPattern)) // Конец текущей транзакции
+                else if (currentTransaction != null)
                 {
-                    if (TryParseTransaction(currentTransactionLines, out var transaction))
-                    {
-                        transactions.Add(transaction);
-                    }
-                    currentTransactionLines.Clear();
-                }
-            }
 
-            // Обработка последней транзакции
-            if (currentTransactionLines.Count > 0)
-            {
-                if (TryParseTransaction(currentTransactionLines, out var transaction))
-                {
-                    transactions.Add(transaction);
                 }
             }
 
             return transactions;
         }
 
-        private static bool TryParseTransaction(List<string> transactionLines, out Transaction transaction)
+
+        static string NormalizeCurrencySpacing(string line)
         {
-            transaction = null;
+            return Regex.Replace(line, @"([+-])\s*([\d\s.,]+)\s*(₽)", m =>
+                $"{m.Groups[1].Value}{m.Groups[2].Value.Replace(" ", "").Replace("\u20bd", "")}{m.Groups[3].Value}");
+        }
+
+        static Transaction? ParseTransaction(string[] splitLine, string[] splitNextLine)
+        {
+
             try
             {
-                var fullText = string.Join(" ", transactionLines); // Соединяем строки в один текст
-                var pattern = @"(?<opDate>\d{2}\.\d{2}\.\d{4})\s+(?<chDate>\d{2}\.\d{2}\.\d{4})\s+(?<opAmount>[+-]?\d{1,3}(?:\s?\d{3})*(?:,\d{2})?\s₽)\s+(?<cardAmount>[+-]?\d{1,3}(?:\s?\d{3})*(?:,\d{2})?\s₽)\s+(?<description>.+?)\s+(?<cardNumber>\d{4})";
+                var culture = new CultureInfo("ru-RU");
 
-                var match = Regex.Match(fullText, pattern);
-                if (!match.Success)
-                {
-                    return false;
-                }
+                // Формируем DateTime с учетом времени
+                DateTime operationDateTime = DateTime.ParseExact(
+                    splitLine[0] + " " + splitNextLine[0], "dd.MM.yyyy HH:mm", culture);
 
-                transaction = new Transaction
+                DateTime debitDateTime = DateTime.ParseExact(
+                    splitLine[1] + " " + splitNextLine[1], "dd.MM.yyyy HH:mm", culture);
+
+                return new Transaction
                 {
-                    OperationDateTime = DateTime.ParseExact(
-                        $"{match.Groups["opDate"].Value} {transactionLines[0].Split(' ')[1]}",
-                        "dd.MM.yyyy HH:mm",
-                        CultureInfo.InvariantCulture),
-                    ChargeDate = DateTime.ParseExact(
-                        $"{match.Groups["chDate"].Value} {transactionLines[0].Split(' ')[2]}",
-                        "dd.MM.yyyy HH:mm",
-                        CultureInfo.InvariantCulture),
-                    OperationAmount = decimal.Parse(match.Groups["opAmount"].Value.Replace("₽", "").Trim(), CultureInfo.InvariantCulture),
-                    CardAmount = decimal.Parse(match.Groups["cardAmount"].Value.Replace("₽", "").Trim(), CultureInfo.InvariantCulture),
-                    Description = match.Groups["description"].Value.Trim(),
-                    CardNumber = match.Groups["cardNumber"].Value.Trim()
+                    OperationDate = operationDateTime,
+                    DebitDate = debitDateTime,
+                    Amount = ParseCurrency(splitLine[2]),
+                    AmountInCardCurrency = ParseCurrency(splitLine[3]),
+                    CardNumber = splitLine[^1], // Последний элемент — номер карты
+                    Description = string.Join(" ", splitLine[4..^1]) + " " + string.Join(" ", splitNextLine[2..])
                 };
-
-                return true;
             }
             catch
             {
-                return false;
+                return null;
             }
         }
 
+        static decimal ParseCurrency(string value)
+        {
+            // Убираем пробелы, ₽ и другие символы перед конвертацией
+            string cleanedValue = value.Replace(" ", "").Replace("₽", "").Trim();
+            return decimal.Parse(cleanedValue, CultureInfo.InvariantCulture);
+        }
     }
 }

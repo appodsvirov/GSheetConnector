@@ -23,6 +23,8 @@ builder.Services.AddSingleton<TelegramBotService>();
 
 var parser = new StatementParser();
 var pdfText = parser.ReadPdf("C:\\Users\\mr_bi\\Desktop\\test.pdf");
+var transactions = parser.ParseTransactions(pdfText);
+
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -40,11 +42,19 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.MapControllers();
 
-
+//// Устанавливаем Webhook при старте (В разработке...)
+//app.Lifetime.ApplicationStarted.Register(async () =>
+//{
+//    var botService = app.Services.GetRequiredService<TelegramBotService>();
+//    string webhookUrl = $"https://config["ServerConfiguration:BotToken"]/bot";
+//    await botService.SetWebhookAsync(webhookUrl);
+//});
 
 // При запуске включаем бота
 var botService = app.Services.GetRequiredService<TelegramBotService>();
 botService.Start();
+
+
 
 
 app.Run();

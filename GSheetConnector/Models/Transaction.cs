@@ -7,13 +7,13 @@
 
     public class Transaction
     {
-        public DateTime OperationDateTime { get; set; }
-        public DateTime ChargeDate { get; set; }
-        public decimal OperationAmount { get; set; }
-        public decimal CardAmount { get; set; }
-        public string Description { get; set; }
-        public string CardNumber { get; set; }
-
+        public DateTime OperationDate { get; set; }  // Дата и время операции
+        public DateTime DebitDate { get; set; }      // Дата и время списания
+        public decimal Amount { get; set; }          // Сумма в валюте операции
+        public decimal AmountInCardCurrency { get; set; } // Сумма операции в валюте карты
+        public string Description { get; set; } = ""; // Описание операции
+        public string CardNumber { get; set; }       // Последние 4 цифры карты
     }
+
 
 }
