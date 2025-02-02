@@ -88,7 +88,7 @@ public class GoogleSheetsService
     public async Task UpdateCellWithCurrentDateTimeAsync(string range)
     {
         // Получаем текущую дату и время
-        var currentDateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        var currentDateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
 
         var valueRange = new ValueRange
         {
@@ -112,6 +112,7 @@ public class GoogleSheetsService
         var articles = _articleParser.ParseSheet(sheet);
 
         _articleParser.Merge(articles, statements);
+
         await UpdateArticlesToSheetAsync(articles, sheetName);
     }
 
