@@ -1,4 +1,7 @@
-﻿using System.Net;
+﻿using GSheetConnector.Interfaces;
+using System.Net;
+using System.Text;
+using GSheetConnector.Models.GoogleTables;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
@@ -6,17 +9,23 @@ using Telegram.Bot.Types.Enums;
 
 namespace GSheetConnector.Services
 {
-    public class TelegramBotService
+    public class TelegramBotService: ITelegramService
     {
         private readonly TelegramBotClient _botClient;
         private readonly string _downloadPath = "Downloads"; // Папка для файлов
         private readonly string _token;
-        public TelegramBotService(IConfiguration config)
+        private GoogleSheetsService _googleSheetsService;
+        private IFileReader _reader;
+        private IStatementParser _parser;
+        public TelegramBotService(IConfiguration config, GoogleSheetsService googleSheetsService, IFileReader reader, IStatementParser parser)
         {
+            _googleSheetsService = googleSheetsService;
             _token = config["BotConfiguration:BotToken"]
                          ?? throw new ArgumentNullException("Bot token is missing");
 
             _botClient = new TelegramBotClient(_token);
+            _reader = reader;
+            _parser = parser;
         }
 
         public void Start()
@@ -81,9 +90,17 @@ namespace GSheetConnector.Services
                 var response = await httpClient.GetAsync(fileUrl);
                 if (response.IsSuccessStatusCode)
                 {
+
                     var fileBytes = await response.Content.ReadAsByteArrayAsync();
                     await File.WriteAllBytesAsync(savePath, fileBytes);
-                    await bot.SendTextMessageAsync(chatId, $"✅ Файл сохранён: {fileName}");
+                    string fileContent = _reader.ReadPdf(savePath);
+
+                    var statements = _parser.ParseTransactions(fileContent)
+                        .Select(s => new ArticleModel(s))
+                        .ToList();
+
+                    await _googleSheetsService.UpdateArticleAsync(statements);
+                    await bot.SendTextMessageAsync(chatId, $"✅ Файл импортирован: {fileName}");
                     Console.WriteLine($"Файл {fileName} сохранён в {savePath}");
                 }
                 else
@@ -93,6 +110,8 @@ namespace GSheetConnector.Services
                 }
             }
         }
+
+
 
         private Task HandleErrorAsync(ITelegramBotClient bot, Exception exception, CancellationToken cancellationToken)
         {

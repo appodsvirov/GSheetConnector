@@ -2,43 +2,26 @@
 using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Text.RegularExpressions;
+using GSheetConnector.Interfaces;
 using GSheetConnector.Models;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
 
+
+//TODO
+// 1) Все методы с Parse заменить на TryParse, избегая исключений
+// 2) Сделать проверки данных
+// 3) Добавить лог
+
 namespace GSheetConnector.Services
 {
-    public class StatementParser
+    public class StatementParser: IStatementParser
     {
         /// <summary>
-        /// Считывает текст из PDF файла.
+        /// Метод для парсинга text и извлечения всех транзакций из него
         /// </summary>
-        /// <param name="filePath">Путь к PDF файлу.</param>
-        /// <returns>Текст из PDF файла.</returns>
-        /// <exception cref="FileNotFoundException">Если файл не найден.</exception>
-        public string ReadPdf(string filePath)
-        {
-            if (!File.Exists(filePath))
-            {
-                //throw new FileNotFoundException("PDF файл не найден", filePath);
-                return "";
-            }
-
-            var textBuilder = new StringBuilder();
-
-            using (var pdfReader = new PdfReader(filePath))
-            using (var pdfDocument = new PdfDocument(pdfReader))
-            {
-                for (int page = 1; page <= pdfDocument.GetNumberOfPages(); page++)
-                {
-                    var pageText = PdfTextExtractor.GetTextFromPage(pdfDocument.GetPage(page));
-                    textBuilder.AppendLine(pageText);
-                }
-            }
-
-            return textBuilder.ToString();
-        }
-
+        /// <param name="text"></param>
+        /// <returns></returns>
         public IEnumerable<Transaction> ParseTransactions(string text)
         {
             var transactions = new List<Transaction>();
@@ -58,6 +41,12 @@ namespace GSheetConnector.Services
                     var splitLine = normalizeLine.Split(" ");
 
                     var nextLine = lines[++i];
+
+                    if (i >= lines.Length)
+                    {
+                        return transactions;
+                    }
+
                     var splitNextLine = nextLine.Split(" ");
 
 
@@ -66,7 +55,6 @@ namespace GSheetConnector.Services
 
                     while (true)
                     {
-                        
                         nextLine = lines[++i];
 
                         if (nextLine.Contains("Пополнения:"))
@@ -75,6 +63,12 @@ namespace GSheetConnector.Services
                             return transactions;
                         }
 
+                        if (i >= lines.Length)
+                        {
+                            return transactions;
+                        }
+
+                        // Если каждая следующая строка не начало следующей транзакции, значит она является продолжением описания текущей транзакции
                         if (!firstLineTransactionRegex.Match(nextLine).Success)
                         {
                             currentTransaction.Description += nextLine;
@@ -97,21 +91,30 @@ namespace GSheetConnector.Services
             return transactions;
         }
 
-
-        static string NormalizeCurrencySpacing(string line)
+        /// <summary>
+        /// В строке с суммой между символами [+-] и ₽ удаляет все пробелы и удаляет знак ₽ 
+        /// </summary>
+        /// <param name="line"></param>
+        /// <returns></returns>
+        private static string NormalizeCurrencySpacing(string line)
         {
             return Regex.Replace(line, @"([+-])\s*([\d\s.,]+)\s*(₽)", m =>
                 $"{m.Groups[1].Value}{m.Groups[2].Value.Replace(" ", "").Replace("\u20bd", "")}{m.Groups[3].Value}");
         }
 
-        static Transaction? ParseTransaction(string[] splitLine, string[] splitNextLine)
+        /// <summary>
+        /// Формирование транзакции по двум строкам. Следующие строки, если они имеются -- это продолжение Description
+        /// </summary>
+        /// <param name="splitLine"></param>
+        /// <param name="splitNextLine"></param>
+        /// <returns></returns>
+        private static Transaction? ParseTransaction(string[] splitLine, string[] splitNextLine)
         {
-
             try
             {
                 var culture = new CultureInfo("ru-RU");
 
-                // Формируем DateTime с учетом времени
+                // Формируем DateTime-ы c с учетом, что даты и время находятся в разных строках
                 DateTime operationDateTime = DateTime.ParseExact(
                     splitLine[0] + " " + splitNextLine[0], "dd.MM.yyyy HH:mm", culture);
 
@@ -134,9 +137,9 @@ namespace GSheetConnector.Services
             }
         }
 
-        static decimal ParseCurrency(string value)
+        // Получение decimal из string
+        private static decimal ParseCurrency(string value)
         {
-            // Убираем пробелы, ₽ и другие символы перед конвертацией
             string cleanedValue = value.Replace(" ", "").Replace("₽", "").Trim();
             return decimal.Parse(cleanedValue, CultureInfo.InvariantCulture);
         }

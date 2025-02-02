@@ -365,3 +365,5 @@ FodyWeavers.xsd
 /GSheetConnector/appsettings.json
 /GSheetConnector/Downloads
 /GSheetConnector/appsettings.json
+*.json
+/.gitignore

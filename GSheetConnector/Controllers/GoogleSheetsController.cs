@@ -41,7 +41,7 @@ namespace GSheetConnector.Controllers
             try
             {
                 // Обновляем первую пустую ячейку
-                await _googleSheetsService.UpdateFirstEmptyCellInColumnAsync();
+                //await _googleSheetsService.UpdateArticle();
                 return Ok("Первая пустая ячейка успешно обновлена с текущей датой и временем.");
             }
             catch (Exception ex)

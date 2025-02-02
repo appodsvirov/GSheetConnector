@@ -1,13 +1,29 @@
-﻿namespace GSheetConnector.Models.GoogleTables
+﻿using GSheetConnector.Attributs;
+
+namespace GSheetConnector.Models.GoogleTables
 {
     public class ArticleModel
     {
-        public int Number { get; set; }
-        public string? Period { get; set; }
-        public DateTime DateTime { get; set; }
-        public CodeType CodeType { get; set; }
-        public string? Comment { get; set; }
-        public Code? Article { get; set; }
-        public Card Card { get; set; }
+        [ColumnName("№")] public int Number { get; set; }
+        [ColumnName("Period")] public string? Period { get; set; }
+        [ColumnName("Date")] public DateTime DateTime { get; set; }
+        [ColumnName("Rev/costs")] public CodeType CodeType { get; set; }
+        [ColumnName("Comments")] public string? Comment { get; set; }
+        [ColumnName("Article")] public Code? Article { get; set; } = null;
+        [ColumnName("Card")] public Card Card { get; set; } = null;
+        [ColumnName("Sum")] public decimal Sum { get; set; }
+
+        public ArticleModel()
+        {
+            
+        }
+
+        public ArticleModel(Transaction transaction)
+        {
+            DateTime = transaction.OperationDate;
+            Sum = Math.Abs(transaction.Amount);
+            CodeType = transaction.Amount >= 0 ? CodeType.Revenue : CodeType.Cost;
+            Comment = transaction.Description;
+        }
     }
 }
