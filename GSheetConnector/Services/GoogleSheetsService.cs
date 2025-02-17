@@ -27,80 +27,11 @@ public class GoogleSheetsService
         });
     }
 
-    /// <summary>
-    /// Метод, который ищет первую незаполненную строку на указанном листе и возвращает её адрес в виде строки:
-    /// </summary>
-    public async Task<string> GetFirstEmptyRowAddressAsync(string sheetName, string column = "A")
-    {
-        try
-        {
-            // Считываем весь лист
-            var values = await ReadEntireSheetAsync(sheetName);
-
-            // Находим первую пустую строку в указанной колонке
-            int rowIndex = 0;
-            while (rowIndex < values.Count && rowIndex < 1000) // Ограничение в 1000 строк
-            {
-                var cellValue = rowIndex < values.Count && values[rowIndex].Count > 0
-                    ? values[rowIndex][0]?.ToString()
-                    : null;
-
-                if (string.IsNullOrEmpty(cellValue))
-                {
-                    break;
-                }
-                rowIndex++;
-            }
-
-            // Возвращаем адрес первой пустой строки
-            return $"{sheetName}!{column}{rowIndex + 1}";  // Строки начинаются с 1
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Ошибка при поиске первой пустой строки: {ex.Message}");
-            return string.Empty;
-        }
-    }
-
-
-    public async Task UpdateCellAsync(string range, string value)
-    {
-        var valueRange = new ValueRange
-        {
-            Values = new[] { new[] { value } }
-        };
-
-        var updateRequest = _sheetsService.Spreadsheets.Values.Update(valueRange, _spreadsheetId, range);
-        updateRequest.ValueInputOption = SpreadsheetsResource.ValuesResource.UpdateRequest.ValueInputOptionEnum.RAW;
-
-        await updateRequest.ExecuteAsync();
-    }
-
     public async Task<IList<IList<object>>> ReadRangeAsync(string range)
     {
         var request = _sheetsService.Spreadsheets.Values.Get(_spreadsheetId, range);
         var response = await request.ExecuteAsync();
         return response.Values;
-    }
-
-
-
-    public async Task UpdateCellWithCurrentDateTimeAsync(string range)
-    {
-        // Получаем текущую дату и время
-        var currentDateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
-
-        var valueRange = new ValueRange
-        {
-            Values = new[] { new[] { currentDateTime } }
-        };
-
-        // Выполняем обновление указанного диапазона
-        var updateRequest = _sheetsService.Spreadsheets.Values.Update(valueRange, _spreadsheetId, range);
-        updateRequest.ValueInputOption = SpreadsheetsResource.ValuesResource.UpdateRequest.ValueInputOptionEnum.RAW;
-
-        // Выполняем запрос
-        await updateRequest.ExecuteAsync();
     }
 
     // TODO
@@ -115,7 +46,6 @@ public class GoogleSheetsService
 
         await UpdateArticlesToSheetAsync(articles, sheetName);
     }
-
 
     public async Task UpdateArticlesToSheetAsync(List<ArticleModel> articles, string sheetName)
     {
@@ -157,7 +87,7 @@ public class GoogleSheetsService
 
 
     /// <summary>
-    /// Возвращает список всех листов 
+    /// Возвращает список названий всех листов 
     /// </summary>
     private async Task<List<string>> GetSheetNamesAsync()
     {

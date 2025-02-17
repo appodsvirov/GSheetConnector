@@ -4,15 +4,15 @@ namespace GSheetConnector.Models.GoogleTables
 {
     public class ArticleModel
     {
-        [ColumnName("№")] public int Number { get; set; }
-        [ColumnName("Period")] public string? Period { get; set; }
-        [ColumnName("Date", "Time")] public DateTime DateTime { get; set; }
+        [ColumnName("№", IsReadOnlyPropert: true)] public int Number { get; set; }
+        [ColumnName("Period", IsReadOnlyPropert: true)] public string? Period { get; set; }
+        [ColumnName("Date", ALias:"Time")] public DateTime DateTime { get; set; }
         [ColumnName("Rev/costs")] public CodeType CodeType { get; set; }
         [ColumnName("Description of the operation")] public string? Description { get; set; }
         [ColumnName("Comments")] public string? Comment { get; set; }
-        [ColumnName("Article")] public Code? Article { get; set; } = null;
-        [ColumnName("Card")] public Card Card { get; set; } = null;
-        [ColumnName("Sum")] public decimal Sum { get; set; }
+        [ColumnName("Article", IsReadOnlyPropert: true)] public Code? Article { get; set; } = null;
+        [ColumnName("Card", IsReadOnlyPropert: true)] public Card Card { get; set; } = null;
+        [ColumnName("Total")] public decimal Sum { get; set; }
 
         public ArticleModel()
         {
