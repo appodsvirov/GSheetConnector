@@ -6,18 +6,18 @@ using Google.Apis.Sheets.v4;
 using GSheetConnector.Interfaces;
 using GSheetConnector.Models.GoogleTables;
 using GSheetConnector.Attributs;
+using System.Text.RegularExpressions;
 
 namespace GSheetConnector.Services;
 
 public class GoogleSheetsService
 {
     private readonly SheetsService _sheetsService;
-    private readonly string _spreadsheetId;
+    private string _spreadsheetId;
     private readonly ISheetParser<ArticleModel> _articleParser = new ArticleSheetParser();
-    public GoogleSheetsService(string credentialsPath, string spreadsheetId)
-    {
-        _spreadsheetId = spreadsheetId;
 
+    public GoogleSheetsService(string credentialsPath)
+    {
         using var stream = new FileStream(credentialsPath, FileMode.Open, FileAccess.Read);
         var credential = GoogleCredential.FromStream(stream)
             .CreateScoped(SheetsService.Scope.Spreadsheets);
@@ -29,6 +29,15 @@ public class GoogleSheetsService
         });
     }
 
+    public void SetSpreadsheetByUrl(string url)
+    {
+        var match = Regex.Match(url, @"/spreadsheets/d/([a-zA-Z0-9-_]+)");
+        if (!match.Success)
+            throw new ArgumentException("Некорректный URL Google Таблицы.");
+
+        _spreadsheetId = match.Groups[1].Value;
+    }
+
     public async Task<IList<IList<object>>> ReadRangeAsync(string range)
     {
         var request = _sheetsService.Spreadsheets.Values.Get(_spreadsheetId, range);
@@ -36,7 +45,6 @@ public class GoogleSheetsService
         return response.Values;
     }
 
-    // TODO
     public async Task UpdateArticleAsync(List<ArticleModel> statements)
     {
         var sheetName = "Article";
@@ -48,9 +56,7 @@ public class GoogleSheetsService
             return;
         }
 
-        // Читаем заголовки (первая строка)
         var headers = await ReadHeadersAsync(sheetName);
-
         if (headers.Count == 0)
         {
             Console.WriteLine("Не удалось прочитать заголовки колонок.");
@@ -75,42 +81,6 @@ public class GoogleSheetsService
         }
     }
 
-    public async Task UpdateArticlesToSheetAsync(List<ArticleModel> articles, string sheetName)
-    {
-        try
-        {
-            var sheet = await ReadEntireSheetAsync(sheetName);
-            if (sheet.Count == 0) return; // Если лист пустой, ничего не делаем
-
-            var headers = sheet[0].Select(h => h.ToString()).ToList(); // Получаем заголовки колонок
-            var properties = typeof(ArticleModel).GetProperties()
-                .Select(p => new
-                {
-                    Property = p,
-                    Attribute = p.GetCustomAttribute<ColumnNameAttribute>()
-                })
-                .Where(p => p.Attribute != null && !p.Attribute.IsReadOnlyPropert) // Игнорируем ReadOnly
-                .ToList();
-
-            var propertyMap = new Dictionary<string, PropertyInfo>();
-
-            foreach (var prop in properties)
-            {
-                if (headers.Contains(prop.Attribute.Name))
-                    propertyMap[prop.Attribute.Name] = prop.Property;
-
-                if (!string.IsNullOrEmpty(prop.Attribute.Alias) && headers.Contains(prop.Attribute.Alias))
-                    propertyMap[prop.Attribute.Alias] = prop.Property;
-            }
-
-            await AppendArticlesToSheetAsync(articles, sheetName, headers);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Ошибка при обновлении данных в Google Sheets: {ex.Message}");
-        }
-    }
-
     public async Task AppendArticlesToSheetAsync(List<ArticleModel> articles, string sheetName, List<string> headers)
     {
         try
@@ -121,52 +91,20 @@ public class GoogleSheetsService
                     Property = p,
                     Attribute = p.GetCustomAttribute<ColumnNameAttribute>()
                 })
-                .Where(p => p.Attribute != null && !p.Attribute.IsReadOnlyPropert) // Игнорируем ReadOnly
+                .Where(p => p.Attribute != null && !p.Attribute.IsReadOnlyPropert)
                 .ToList();
 
-            var propertyMap = new Dictionary<string, PropertyInfo>();
+            var propertyMap = properties
+                .SelectMany(p => new[] { p.Attribute.Name, p.Attribute.Alias })
+                .Where(name => !string.IsNullOrEmpty(name) && headers.Contains(name))
+                .ToDictionary(name => name, name => properties.First(p => p.Attribute.Name == name || p.Attribute.Alias == name).Property);
 
-            foreach (var prop in properties)
-            {
-                if (headers.Contains(prop.Attribute.Name))
-                    propertyMap[prop.Attribute.Name] = prop.Property;
+            var values = articles.Select(article => headers
+                .Select(header => propertyMap.TryGetValue(header, out var property) ? property.GetValue(article) ?? "" : "")
+                .ToList() as IList<object>)
+                .ToList();
 
-                if (!string.IsNullOrEmpty(prop.Attribute.Alias) && headers.Contains(prop.Attribute.Alias))
-                    propertyMap[prop.Attribute.Alias] = prop.Property;
-            }
-
-            var values = new List<IList<object>>();
-
-            foreach (var article in articles)
-            {
-                var row = new object[headers.Count]; // Создаем строку нужной длины
-
-                foreach (var header in headers)
-                {
-                    if (propertyMap.TryGetValue(header, out var property))
-                    {
-                        object? value = property.GetValue(article);
-
-                        if (property.PropertyType == typeof(DateTime))
-                        {
-                            if (header == "Time")
-                                value = ((DateTime)value).ToShortTimeString();
-                            else if (header == "Date")
-                                value = ((DateTime)value).ToShortDateString();
-                        }
-                        else if (property.PropertyType == typeof(CodeType))
-                        {
-                            value = value?.ToString();
-                        }
-
-                        row[headers.IndexOf(header)] = value ?? "";
-                    }
-                }
-
-                values.Add(row);
-            }
-
-            var range = $"{sheetName}!A2"; // Начинаем со второй строки
+            var range = $"{sheetName}!A2";
             var valueRange = new ValueRange { Values = values };
 
             var appendRequest = _sheetsService.Spreadsheets.Values.Append(valueRange, _spreadsheetId, range);
@@ -180,12 +118,6 @@ public class GoogleSheetsService
         }
     }
 
-
-
-
-    /// <summary>
-    /// Возвращает список названий всех листов 
-    /// </summary>
     private async Task<List<string>> GetSheetNamesAsync()
     {
         try
@@ -193,38 +125,12 @@ public class GoogleSheetsService
             var request = _sheetsService.Spreadsheets.Get(_spreadsheetId);
             var response = await request.ExecuteAsync();
 
-            var sheetNames = response.Sheets
-                .Select(sheet => sheet.Properties.Title)
-                .ToList();
-
-            return sheetNames;
+            return response.Sheets.Select(sheet => sheet.Properties.Title).ToList();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Ошибка при получении списка листов: {ex.Message}");
             return new List<string>();
-        }
-    }
-
-
-    /// <summary>
-    /// Метод для считывания всего листа sheetName
-    /// </summary>
-    public async Task<IList<IList<object>>> ReadEntireSheetAsync(string sheetName)
-    {
-        try
-        {
-            // Указываем диапазон как "SheetName"
-            var request = _sheetsService.Spreadsheets.Values.Get(_spreadsheetId, sheetName);
-            var response = await request.ExecuteAsync();
-
-            // Если данных нет, возвращаем пустой список
-            return response.Values ?? new List<IList<object>>();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Ошибка при чтении листа {sheetName}: {ex.Message}");
-            return new List<IList<object>>();
         }
     }
 }

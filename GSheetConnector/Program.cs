@@ -1,31 +1,38 @@
 using GSheetConnector.Controllers;
 using GSheetConnector.Interfaces;
+using GSheetConnector.Models.TelegramBot;
 using GSheetConnector.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Configuration
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("appconfig.json", optional: true, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
+
+
 // Получение значений из конфигурации
 var googleSheetsConfig = builder.Configuration.GetSection("GoogleSheets");
+var botConfig = builder.Configuration.GetSection("BotConfiguration");
 
 // Регистрация GoogleSheetsService с параметрами из конфигурации
 builder.Services.AddSingleton<GoogleSheetsService>(provider =>
 {
     var credentialsPath = googleSheetsConfig["CredentialsPath"];
-    var spreadsheetId = googleSheetsConfig["SpreadsheetId"];
-    return new GoogleSheetsService(credentialsPath, spreadsheetId);
+    return new GoogleSheetsService(credentialsPath);
 });
 
+// Регистрация TelegramBotService
+builder.Services.AddSingleton<ITelegramService>(sp =>
+{
+    var botToken = botConfig["BotToken"];
+    var googleSheetsService = sp.GetRequiredService<GoogleSheetsService>();
+    return new TelegramBotService(botToken, googleSheetsService);
+});
 
-builder.Services.AddSingleton<ITelegramService, TelegramBotService>(); 
 builder.Services.AddSingleton<IFileReader, FileReader>();
 builder.Services.AddSingleton<IStatementParser, StatementParser>(); 
-
-
-
-//var parser = new StatementParser();
-//var pdfText = parser.ReadPdf("C:\\Users\\mr_bi\\Desktop\\test.pdf");
-//var transactions = parser.ParseTransactions(pdfText);
-
+builder.Services.AddSingleton<UserSheetStore>(); 
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

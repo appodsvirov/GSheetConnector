@@ -6,117 +6,77 @@ using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using GSheetConnector.Models.TelegramBot;
 
-namespace GSheetConnector.Services
+namespace GSheetConnector.Services;
+public class TelegramBotService: ITelegramService
 {
-    public class TelegramBotService: ITelegramService
+    private readonly ITelegramBotClient _botClient;
+    private readonly GoogleSheetsService _googleSheetsService;
+    private readonly Dictionary<long, string> _userSheets = new();
+
+    public TelegramBotService(string botToken, GoogleSheetsService googleSheetsService)
     {
-        private readonly TelegramBotClient _botClient;
-        private readonly string _downloadPath = "Downloads"; // Папка для файлов
-        private readonly string _token;
-        private GoogleSheetsService _googleSheetsService;
-        private IFileReader _reader;
-        private IStatementParser _parser;
-        public TelegramBotService(IConfiguration config, GoogleSheetsService googleSheetsService, IFileReader reader, IStatementParser parser)
-        {
-            _googleSheetsService = googleSheetsService;
-            _token = config["BotConfiguration:BotToken"]
-                         ?? throw new ArgumentNullException("Bot token is missing");
+        _botClient = new TelegramBotClient(botToken);
+        _googleSheetsService = googleSheetsService;
+    }
 
-            _botClient = new TelegramBotClient(_token);
-            _reader = reader;
-            _parser = parser;
-        }
+    public void Start()
+    {
+        var cts = new CancellationTokenSource();
+        _botClient.StartReceiving(HandleUpdateAsync, HandleErrorAsync, cancellationToken: cts.Token);
+        Console.WriteLine("Бот запущен.");
+    }
 
-        public void Start()
+    private async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
+    {
+        if (update.Type != UpdateType.Message || update.Message?.Text == null) return;
+
+        var chatId = update.Message.Chat.Id;
+        var messageText = update.Message.Text.Trim();
+
+        if (messageText.StartsWith("/settable"))
         {
-            var receiverOptions = new ReceiverOptions
+            var parts = messageText.Split(' ', 2);
+            if (parts.Length < 2)
             {
-                AllowedUpdates = new[] { UpdateType.Message } // Получаем только сообщения
-            };
-
-            _botClient.StartReceiving(
-                HandleUpdateAsync,
-                HandleErrorAsync,
-                receiverOptions,
-                CancellationToken.None
-            );
-
-            Console.WriteLine("🤖 Бот запущен...");
-        }
-
-        private async Task HandleUpdateAsync(ITelegramBotClient bot, Update update, CancellationToken cancellationToken)
-        {
-            if (update.Message is not { } message) return;
-            long chatId = message.Chat.Id;
-
-            // 📌 Обработка текстовых сообщений
-            if (!string.IsNullOrEmpty(message.Text))
-            {
-                string text = message.Text.ToLower();
-                string response = text switch
-                {
-                    "/start" => "Привет! Отправь мне файл!",
-                    _ => "Я жду файл или документ."
-                };
-
-                await bot.SendTextMessageAsync(chatId, response);
+                await botClient.SendTextMessageAsync(chatId, "Используйте команду: /settable <URL Google таблицы>");
+                return;
             }
 
-            // Обработка документов 
-            if (message.Document is { } document)
+            var spreadsheetUrl = parts[1].Trim();
+            try
             {
-                await HandleFileAsync(bot, chatId, document.FileId, document.FileName);
+                _googleSheetsService.SetSpreadsheetByUrl(spreadsheetUrl);
+                _userSheets[chatId] = spreadsheetUrl;
+                await botClient.SendTextMessageAsync(chatId, "Google таблица установлена успешно!");
             }
-
-            // Обработка изображений
-            if (message.Photo?.Length > 0)
+            catch (Exception ex)
             {
-                var photo = message.Photo.Last(); // Берём изображение лучшего качества
-                await HandleFileAsync(bot, chatId, photo.FileId, "photo.jpg");
-            }
-        }
-
-        private async Task HandleFileAsync(ITelegramBotClient bot, long chatId, string fileId, string fileName)
-        {
-            var file = await bot.GetFileAsync(fileId);
-            string fileUrl = $"https://api.telegram.org/file/bot{_token}/{file.FilePath}";
-
-            string savePath = Path.Combine(_downloadPath, fileName);
-            Directory.CreateDirectory(_downloadPath); // Создаём папку, если её нет
-
-            using (var httpClient = new HttpClient())
-            {
-                var response = await httpClient.GetAsync(fileUrl);
-                if (response.IsSuccessStatusCode)
-                {
-
-                    var fileBytes = await response.Content.ReadAsByteArrayAsync();
-                    await File.WriteAllBytesAsync(savePath, fileBytes);
-                    string fileContent = _reader.ReadPdf(savePath);
-
-                    var statements = _parser.ParseTransactions(fileContent)
-                        .Select(s => new ArticleModel(s))
-                        .ToList();
-
-                    await _googleSheetsService.UpdateArticleAsync(statements);
-                    await bot.SendTextMessageAsync(chatId, $"✅ Файл импортирован: {fileName}");
-                    Console.WriteLine($"Файл {fileName} сохранён в {savePath}");
-                }
-                else
-                {
-                    await bot.SendTextMessageAsync(chatId, "❌ Ошибка загрузки файла.");
-                    Console.WriteLine($"Ошибка загрузки файла: {response.StatusCode}");
-                }
+                await botClient.SendTextMessageAsync(chatId, $"Ошибка: {ex.Message}");
             }
         }
-
-
-
-        private Task HandleErrorAsync(ITelegramBotClient bot, Exception exception, CancellationToken cancellationToken)
+        else if (messageText == "/gettable")
         {
-            Console.WriteLine($"Ошибка бота: {exception.Message}");
-            return Task.CompletedTask;
+            if (_userSheets.TryGetValue(chatId, out var sheetUrl))
+            {
+                await botClient.SendTextMessageAsync(chatId, $"Текущая таблица: {sheetUrl}");
+            }
+            else
+            {
+                await botClient.SendTextMessageAsync(chatId, "Вы не установили Google таблицу. Используйте команду /settable <URL>");
+            }
+        }
+        else
+        {
+            await botClient.SendTextMessageAsync(chatId, "Неизвестная команда. Доступные команды: \n/settable <URL> - Установить Google таблицу\n/gettable - Получить текущий URL таблицы");
         }
     }
+
+    private Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
+    {
+        Console.WriteLine($"Ошибка в боте: {exception.Message}");
+        return Task.CompletedTask;
+    }
 }
+
