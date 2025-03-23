@@ -6,27 +6,23 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Получение значений из конфигурации
 var googleSheetsConfig = builder.Configuration.GetSection("GoogleSheets");
+var tgConfig = builder.Configuration.GetSection("BotConfiguration");
 
-// Регистрация GoogleSheetsService с параметрами из конфигурации
-builder.Services.AddSingleton<GoogleSheetsService>(provider =>
+
+builder.Services.AddSingleton<IFileReader, FileReader>();
+builder.Services.AddSingleton<IStatementParser, StatementParser>();
+builder.Services.AddSingleton<ITelegramService>(provider =>
 {
     var credentialsPath = googleSheetsConfig["CredentialsPath"];
-    var spreadsheetId = googleSheetsConfig["SpreadsheetId"];
-    return new GoogleSheetsService(credentialsPath, spreadsheetId);
+    var token = tgConfig["BotToken"];
+
+    return new TelegramBotService(
+        provider.GetService<IFileReader>(),
+        provider.GetService<IStatementParser>(),
+        credentialsPath, token);
 });
 
-
-builder.Services.AddSingleton<ITelegramService, TelegramBotService>(); 
-builder.Services.AddSingleton<IFileReader, FileReader>();
-builder.Services.AddSingleton<IStatementParser, StatementParser>(); 
-
-
-
-//var parser = new StatementParser();
-//var pdfText = parser.ReadPdf("C:\\Users\\mr_bi\\Desktop\\test.pdf");
-//var transactions = parser.ParseTransactions(pdfText);
-
-
+//
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
