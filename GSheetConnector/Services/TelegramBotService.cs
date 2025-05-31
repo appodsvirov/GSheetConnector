@@ -103,6 +103,9 @@ public class TelegramBotService : ITelegramService
         }
     }
 
+    /// <summary>
+    /// Обработчик /start: установка URL spreadsheet
+    /// </summary>
     private async Task HandleStartCommand(
         ITelegramBotClient bot,
         long chatId)
@@ -119,6 +122,9 @@ public class TelegramBotService : ITelegramService
             replyMarkup: CreateMainKeyboard());
     }
 
+    /// <summary>
+    /// Обработчик /seturl: установка URL spreadsheet
+    /// </summary>
     private async Task HandleSetUrlCommand(
         ITelegramBotClient bot,
         long chatId,
@@ -142,7 +148,9 @@ public class TelegramBotService : ITelegramService
             $"Теперь вы можете отправлять файлы",
             replyMarkup: CreateMainKeyboard());
     }
-
+    /// <summary>
+    /// Обработчик "Отправка файла"
+    /// </summary>
     private async Task HandleFileUploadCommand(
         ITelegramBotClient bot,
         long chatId)

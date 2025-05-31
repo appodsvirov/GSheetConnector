@@ -60,6 +60,29 @@ public class GoogleSheetsService
         await AppendArticlesToSheetAsync(statements, sheetName, headers);
     }
 
+    /// <summary>
+    /// Возвращает список названий всех листов 
+    /// </summary>
+    private async Task<List<string>> GetSheetNamesAsync()
+    {
+        try
+        {
+            var request = _sheetsService.Spreadsheets.Get(_spreadsheetId);
+            var response = await request.ExecuteAsync();
+
+            var sheetNames = response.Sheets
+                .Select(sheet => sheet.Properties.Title)
+                .ToList();
+
+            return sheetNames;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при получении списка листов: {ex.Message}");
+            return new List<string>();
+        }
+    }
+
     public async Task<List<string>> ReadHeadersAsync(string sheetName)
     {
         try
@@ -72,42 +95,6 @@ public class GoogleSheetsService
         {
             Console.WriteLine($"Ошибка при чтении заголовков: {ex.Message}");
             return new List<string>();
-        }
-    }
-
-    public async Task UpdateArticlesToSheetAsync(List<ArticleModel> articles, string sheetName)
-    {
-        try
-        {
-            var sheet = await ReadEntireSheetAsync(sheetName);
-            if (sheet.Count == 0) return; // Если лист пустой, ничего не делаем
-
-            var headers = sheet[0].Select(h => h.ToString()).ToList(); // Получаем заголовки колонок
-            var properties = typeof(ArticleModel).GetProperties()
-                .Select(p => new
-                {
-                    Property = p,
-                    Attribute = p.GetCustomAttribute<ColumnNameAttribute>()
-                })
-                .Where(p => p.Attribute != null && !p.Attribute.IsReadOnlyPropert) // Игнорируем ReadOnly
-                .ToList();
-
-            var propertyMap = new Dictionary<string, PropertyInfo>();
-
-            foreach (var prop in properties)
-            {
-                if (headers.Contains(prop.Attribute.Name))
-                    propertyMap[prop.Attribute.Name] = prop.Property;
-
-                if (!string.IsNullOrEmpty(prop.Attribute.Alias) && headers.Contains(prop.Attribute.Alias))
-                    propertyMap[prop.Attribute.Alias] = prop.Property;
-            }
-
-            await AppendArticlesToSheetAsync(articles, sheetName, headers);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Ошибка при обновлении данных в Google Sheets: {ex.Message}");
         }
     }
 
@@ -177,54 +164,6 @@ public class GoogleSheetsService
         catch (Exception ex)
         {
             Console.WriteLine($"Ошибка при добавлении данных в Google Sheets: {ex.Message}");
-        }
-    }
-
-
-
-
-    /// <summary>
-    /// Возвращает список названий всех листов 
-    /// </summary>
-    private async Task<List<string>> GetSheetNamesAsync()
-    {
-        try
-        {
-            var request = _sheetsService.Spreadsheets.Get(_spreadsheetId);
-            var response = await request.ExecuteAsync();
-
-            var sheetNames = response.Sheets
-                .Select(sheet => sheet.Properties.Title)
-                .ToList();
-
-            return sheetNames;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Ошибка при получении списка листов: {ex.Message}");
-            return new List<string>();
-        }
-    }
-
-
-    /// <summary>
-    /// Метод для считывания всего листа sheetName
-    /// </summary>
-    public async Task<IList<IList<object>>> ReadEntireSheetAsync(string sheetName)
-    {
-        try
-        {
-            // Указываем диапазон как "SheetName"
-            var request = _sheetsService.Spreadsheets.Values.Get(_spreadsheetId, sheetName);
-            var response = await request.ExecuteAsync();
-
-            // Если данных нет, возвращаем пустой список
-            return response.Values ?? new List<IList<object>>();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Ошибка при чтении листа {sheetName}: {ex.Message}");
-            return new List<IList<object>>();
         }
     }
 }
